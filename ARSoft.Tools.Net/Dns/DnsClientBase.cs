@@ -608,6 +608,7 @@ namespace ARSoft.Tools.Net.Dns
 			if (!IsTcpEnabled)
 				return null;
 
+			var isExistingTcpCLientUsed = tcpClient != null;
 			try
 			{
 				if (tcpClient == null)
@@ -637,19 +638,28 @@ namespace ARSoft.Tools.Net.Dns
 					await tcpStream.WriteAsync(messageData, 0, messageLength, token);
 				}
 
-				if (!await TryReadAsync(tcpClient, tcpStream, lengthBuffer, 2, token))
-					return null;
+				if (!await TryReadAsync(tcpClient, tcpStream, lengthBuffer, 2, token)) {
+					return CloseClientIfNeeded();
+				}
 
 				tmp = 0;
 				int length = DnsMessageBase.ParseUShort(lengthBuffer, ref tmp);
 
 				byte[] resultData = new byte[length];
 
-				return await TryReadAsync(tcpClient, tcpStream, resultData, length, token) ? new QueryResponse(resultData, nameServer, tcpClient, tcpStream) : null;
+				return await TryReadAsync(tcpClient, tcpStream, resultData, length, token) ? new QueryResponse(resultData, nameServer, tcpClient, tcpStream) : CloseClientIfNeeded();
 			}
 			catch (Exception e)
 			{
 				Trace.TraceError("Error on dns query: " + e);
+				return CloseClientIfNeeded();
+			}
+
+			QueryResponse CloseClientIfNeeded() {
+				if (!isExistingTcpCLientUsed) {
+					tcpClient.Close();
+				}
+				
 				return null;
 			}
 		}
